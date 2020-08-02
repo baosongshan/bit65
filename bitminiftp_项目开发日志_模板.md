@@ -514,8 +514,62 @@ static void do_list(session_t *sess)
 }
 ```
 <h2 align=center> 第四天 </h2>
-```
+#### 一、实现PASV模式的数据连接
+```C++
+static void do_pasv(session_t *sess)
+{
+	// 227 Entering Passive Mode (192,168,232,10,140,176).
+	char ip[16] = "192.168.232.10"; //服务器的IP
+	sess->pasv_listen_fd = tcp_server(ip, 0);//port为0代表生成临时端口号
 
+	struct sockaddr_in address;
+	socklen_t addrlen = sizeof(struct sockaddr);
+	if(getsockname(sess->pasv_listen_fd, (struct sockaddr*)&address, &addrlen) < 0)
+		ERR_EXIT("getsockname");
+
+	unsigned short port = ntohs(address.sin_port);
+
+	int v[4] = {0};
+	sscanf(ip, "%u.%u.%u.%u", &v[0], &v[1], &v[2], &v[3]);
+	char msg[MAX_BUFFER_SIZE] = {0};
+	sprintf(msg, "Entering Passive Mode (%u,%u,%u,%u,%u,%u).", v[0],v[1],v[2],v[3], port>>8, port&0x00ff);
+	ftp_reply(sess, FTP_PASVOK, msg);
+}
+```
+#### 二、实现内部进程通讯模块
+```c++
+#ifndef _PRIV_SOCK_H_
+#define _PRIV_SOCK_H_
+
+#include"common.h"
+#include"session.h"
+
+//FTP服务进程向nobody进程请求的命令
+#define PRIV_SOCK_GET_DATA_SOCK 1
+#define PRIV_SOCK_PASV_ACTIVE   2
+#define PRIV_SOCK_PASV_LISTEN   3
+#define PRIV_SOCK_PASV_ACCEPT   4
+
+//nobody 进程对FTP服务进程的应答
+#define PRIV_SOCK_RESULT_OK  1
+#define PRIV_SOCK_RESULT_BAD 2
+
+void priv_sock_init(session_t *sess);
+void priv_sock_close(session_t *sess);
+void priv_sock_set_parent_context(session_t *sess);
+void priv_sock_set_child_context(session_t *sess);
+void priv_sock_send_cmd(int fd, char cmd);
+char priv_sock_get_cmd(int fd);
+void priv_sock_send_result(int fd, char res);
+char priv_sock_get_result(int fd);
+void priv_sock_send_int(int fd, int the_int);
+int priv_sock_get_int(int fd);
+void priv_sock_send_buf(int fd, const char *buf, unsigned int len);
+void priv_sock_recv_buf(int fd, char *buf, unsigned int len);
+void priv_sock_send_fd(int sock_fd, int fd);
+int priv_sock_recv_fd(int sock_fd);
+
+#endif /* _PRIV_SOCK_H_ */
 ```
 <h2 align=center> 第五天 </h2>
 ```
